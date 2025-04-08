@@ -80,7 +80,7 @@ class rank1(RerankerWrapper):
             tensor_parallel_size=int(num_gpus),
             trust_remote_code=True,
             max_model_len=context_size,
-            gpu_memory_utilization=0.9,
+            gpu_memory_utilization=0.95,
             dtype=fp_options,
         )
         self.sampling_params = SamplingParams(

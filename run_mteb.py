@@ -56,7 +56,7 @@ def run_evaluation(dataset_name: str, subtask: str, model_name: str, num_gpus: i
     
     encode_kwargs = {
         # use vLLM to batch
-        "batch_size": 999999 if "rank1" in model_name.lower() else 32
+        "batch_size": 999999 if "rank1" in model_name.lower() else 1024
     }
 
     prompt = get_prompt(dataset_name, subtask)
