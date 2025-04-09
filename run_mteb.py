@@ -18,6 +18,9 @@ from mteb.model_meta import ModelMeta
 from mteb.models.rerankers_custom import RerankerWrapper
 
 from prompts import get_prompt, PROMPT_DICT, validate_json, BEIR_DATASETS
+
+import importlib.util
+from rank1_ft import rank1ft
 from rank1 import rank1
 
 logging.basicConfig(level=logging.INFO)
@@ -80,11 +83,18 @@ def run_evaluation(dataset_name: str, subtask: str, model_name: str, num_gpus: i
         assert validate_json(previous_results), f"Previous results are not valid json: {previous_results}"
     print(f"Previous results: {previous_results}")
 
-    model = rank1(
+    # Choose which model implementation to use based on ft_mode
+    if ft_mode:
+        model_class = rank1ft
+        print("Using rank1_ft implementation")
+    else:
+        model_class = rank1
+        print("Using rank1 implementation")
+        
+    model = model_class(
         model_name_or_path=model_name.strip(), 
         num_gpus=num_gpus, 
-        dataset_prompt=prompt,
-        ft_mode=ft_mode
+        dataset_prompt=prompt
     )
     
     output_dir = f"results/{model_name}/{dataset_name}_{subtask}"

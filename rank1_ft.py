@@ -24,15 +24,15 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class rank1(RerankerWrapper):
-    name: str = "rank1"
+class rank1ft(RerankerWrapper):
+    name: str = "rank1ft"
 
     def __init__(
         self,
         model_name_or_path: str = "jhu-clsp/rank1-7b",
         batch_size: int = 999999999999,
         context_size: int = 16000,
-        max_output_tokens: int = 8192,
+        max_output_tokens: int = 1024,
         fp_options: str = "float16",
         num_gpus: int = 1,
         device: str = "cuda",
@@ -70,10 +70,10 @@ class rank1(RerankerWrapper):
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Cache commonly used token IDs
-        self.true_token = self.tokenizer(" true", add_special_tokens=False).input_ids[0]
-        self.false_token = self.tokenizer(" false", add_special_tokens=False).input_ids[0]
-        self.think_token = self.tokenizer("<think>", add_special_tokens=False).input_ids[0]
-        self.think_end_token = self.tokenizer("</think>", add_special_tokens=False).input_ids[-1]
+        self.true_token = self.tokenizer("1", add_special_tokens=False).input_ids[0]
+        self.false_token = self.tokenizer("0", add_special_tokens=False).input_ids[0]
+        self.think_token = self.tokenizer("<relevance>", add_special_tokens=False).input_ids[0]
+        self.think_end_token = self.tokenizer("</relevance>", add_special_tokens=False).input_ids[-1]
 
         self.model = LLM(
             model=model_name_or_path,
@@ -87,7 +87,7 @@ class rank1(RerankerWrapper):
             temperature=0,
             max_tokens=max_output_tokens,
             logprobs=20,
-            stop=["</think> true", "</think> false"],
+            stop=["<relevance>1", "<relevance>0"],
             skip_special_tokens=False
         )
 
@@ -97,7 +97,7 @@ class rank1(RerankerWrapper):
         generated_texts: List[str]
     ) -> Tuple[List[str], List[int], List[float]]:
         """
-        This function is used to fix incomplete responses from the vLLM model. In some cases the model does not generate the end </think> token.
+        This function is used to fix incomplete responses from the vLLM model. In some cases the model does not generate the end </reasoning> token.
             In these cases, we should force it to generate it so that we have some prediction. 
 
         Args:
@@ -119,7 +119,7 @@ class rank1(RerankerWrapper):
             cleaned_texts.append(text.strip())
         
         forced_prompts = [
-            f"{original_prompt}\n{cleaned_text}\n</think>" 
+            f"{original_prompt}\n{cleaned_text}\n<relevance>" 
             for original_prompt, cleaned_text in zip(original_prompts, cleaned_texts)
         ]
 
@@ -172,7 +172,7 @@ class rank1(RerankerWrapper):
 
     def _process_with_vllm(self, prompts):
         """
-        vLLM is significantly faster than HF, so we use it by default. This function handles the cases where the model does not generate the end </think> token.
+        vLLM is significantly faster than HF, so we use it by default. This function handles the cases where the model does not generate the end </reasoning> token.
 
         Args:
             prompts: The prompts to generate from
@@ -196,7 +196,7 @@ class rank1(RerankerWrapper):
         # Process complete responses first
         for i, output in enumerate(outputs):
             text = output.outputs[0].text
-            print(f"DEBUG Text: {text}")
+            print(f"DEBUG - Text: {text}")
             try:
                 final_logits = output.outputs[0].logprobs[-1]
             except Exception as e:
@@ -205,7 +205,8 @@ class rank1(RerankerWrapper):
                 incomplete_texts.append(text)
                 incomplete_indices.append(i)
                 continue
-
+            
+            print(f"DEBUG: bool check {self.true_token in final_logits} {self.false_token in final_logits}")
             if self.true_token not in final_logits or self.false_token not in final_logits:
                 incomplete_prompts.append(prompts[i])
                 incomplete_texts.append(text)
@@ -222,7 +223,11 @@ class rank1(RerankerWrapper):
             all_outputs[i] = text
             all_output_token_counts[i] = token_count
             all_scores[i] = score
+            
+            print(f"DEBUG: {true_logit} {false_logit} {true_score} {false_score} {score}")
+            print(f"DEBUG - Score: {score}")
         
+        print(f"DEBUG: {len(incomplete_prompts)} incomplete prompts")
         # Handle incomplete responses
         if incomplete_indices:
             fixed_texts, fixed_counts, fixed_scores = self._fix_incomplete_responses(
@@ -241,17 +246,38 @@ class rank1(RerankerWrapper):
 
     def return_prompt(self, query, doc_content, prompt) -> str:
         query = prompt.replace("FILL_QUERY_HERE", query) if prompt else query
-        return "Determine if the following passage is relevant to the query. " \
-                "Answer only with 'true' or 'false'.\n" \
-                f"Query: {query}\n" \
-                f"Passage: {doc_content}\n" \
-                "<think>" # force the model to start with this
+        return f"""
+You are tasked with determining whether a given document is relevant to answering a specific query. Follow these steps carefully:
+1. You will be presented with a query and a document containing a title and content.
+2. First, examine the query.
+3. Next, examine the document.
+4. Analyze the query carefully. Determine what specific information or answer it is seeking. Consider the key concepts, entities, or relationships mentioned in the query.
+5. Carefully read and analyze the document content. Pay attention to the main topics, key information, and any details that might be relevant to the query.
+6. Reason about the relevance of the document to the query. Consider the following:
+- Does the document contain information that directly answers the query?
+- Does it provide context or background information that would be helpful in understanding or answering the query?
+- Are there any significant matches between key terms or concepts in the query and the document?
+- Even if the document doesn't fully answer the query, does it contain partial information that could contribute to an answer?
+7. Based on your analysis, determine whether the document is relevant or not relevant to answering the query.
+8. Provide your reasoning and verdict in the following format:
+<reasoning> [Explain your thought process here, discussing why you believe the document is or is not relevant to the query. Provide specific examples or quotes from the document if applicable.] </reasoning>
+<relevance>[Insert either 0 for not relevant or 1 for relevant]</relevance>
+Remember, the content within the <relevance> tags must be either 0 or 1, with no other text or explanation.
+
+<question> 
+{query} 
+</question>
+
+<document>
+{doc_content} 
+</document>
+<reasoning>"""
 
     def _prepare_prompts_for_rethink(self, prompts: List[str], texts: List[str], rethink_text: str = "Wait") -> List[str]:
         """Prepare prompts for the rethinking step."""
         full_texts = [p + t for p, t in zip(prompts, texts)]
-        stripped_texts = [t.split("</think>")[0] for t in full_texts]
-        just_generated_texts = [t.split("</think>")[0] for t in full_texts]
+        stripped_texts = [t.split("</reasoning>")[0] for t in full_texts]
+        just_generated_texts = [t.split("</reasoning>")[0] for t in full_texts]
         return [s + f"\n{rethink_text}" for s in stripped_texts], just_generated_texts
 
     @torch.inference_mode()
