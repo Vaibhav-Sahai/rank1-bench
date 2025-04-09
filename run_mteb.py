@@ -27,11 +27,16 @@ logger = logging.getLogger(__name__)
 def get_safe_folder_name(model_name):
     return model_name.replace("/", "_").replace("\\", "_")
 
-def run_evaluation(dataset_name: str, subtask: str, model_name: str, num_gpus: int, skip_prompt: bool) -> None:
+def run_evaluation(dataset_name: str, subtask: str, model_name: str, num_gpus: int, skip_prompt: bool, ft_mode: bool = False) -> None:
     """Run MTEB evaluation for specified model and dataset
 
     Args:
         dataset_name: Name of MTEB dataset to evaluate
+        subtask: Subtask name (or None)
+        model_name: Path or name of the model
+        num_gpus: Number of GPUs to use
+        skip_prompt: Whether to skip using dataset-specific prompts
+        ft_mode: Whether to use fine-tuned mode (use 0/1 instead of true/false)
     """
     # Initialize MTEB task and evaluation
     tasks = mteb.get_tasks(tasks=[dataset_name])
@@ -59,7 +64,8 @@ def run_evaluation(dataset_name: str, subtask: str, model_name: str, num_gpus: i
         "batch_size": 999999 if "rank1" in model_name.lower() else 1024
     }
 
-    prompt = get_prompt(dataset_name, subtask)
+    prompt = get_prompt(dataset_name, subtask, ft_mode)
+    
     if prompt is not None and not skip_prompt:
         is_prompted = True
     else:
@@ -74,8 +80,16 @@ def run_evaluation(dataset_name: str, subtask: str, model_name: str, num_gpus: i
         assert validate_json(previous_results), f"Previous results are not valid json: {previous_results}"
     print(f"Previous results: {previous_results}")
 
-    model = rank1(model_name_or_path=model_name.strip(), num_gpus=num_gpus, dataset_prompt=prompt)
+    model = rank1(
+        model_name_or_path=model_name.strip(), 
+        num_gpus=num_gpus, 
+        dataset_prompt=prompt,
+        ft_mode=ft_mode
+    )
+    
     output_dir = f"results/{model_name}/{dataset_name}_{subtask}"
+    if ft_mode:
+        output_dir += "_ft"
     print(f"Output directory: {output_dir}")
 
     # Run evaluation
@@ -98,8 +112,17 @@ def main():
     parser.add_argument("-m", "--model_name", required=True, help="Model name")
     parser.add_argument("-n", "--num_gpus", required=False, help="Number of GPUs", default=1)
     parser.add_argument("-p", "--skip_prompt", action="store_true", help="Skip prompt")
+    parser.add_argument("--ft", action="store_true", help="Use fine-tuned mode (0/1 instead of true/false)")
     args = parser.parse_args()
-    run_evaluation(args.dataset.strip(), args.subtask.strip() if args.subtask is not None else None, args.model_name.strip(), args.num_gpus, args.skip_prompt)
+    
+    run_evaluation(
+        args.dataset.strip(), 
+        args.subtask.strip() if args.subtask is not None else None, 
+        args.model_name.strip(), 
+        args.num_gpus, 
+        args.skip_prompt,
+        args.ft
+    )
 
 
 if __name__ == "__main__":

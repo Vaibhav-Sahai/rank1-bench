@@ -1,7 +1,5 @@
 #!/bin/bash
 
-
-sweep_id=$1
 # Load Python environment
 source env/bin/activate
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
@@ -30,12 +28,34 @@ echo -e "\n=== CPU Information ==="
 lscpu | grep "Model name"
 lscpu | grep "CPU(s):"
 
+# Parse arguments
+model=$1
+dataset=$2
+subtask=$3
+num_gpus=$4
+ft_flag=""
+
+# Check for --ft flag in the arguments
+for arg in "$@"; do
+    if [ "$arg" == "--ft" ]; then
+        ft_flag="--ft"
+        echo "Fine-tuning mode activated (--ft flag detected)"
+        break
+    fi
+done
+
+# if num_gpus is not provided, then set it to 1
+if [ -z "$num_gpus" ]; then
+    num_gpus=1
+fi
+
 # Print arguments
 echo -e "\n=== Script Arguments ==="
-echo "Model: $1"
-echo "Dataset: $2" 
-echo "Subtask: $3"
-echo "Number of GPUs: $4"
+echo "Model: $model"
+echo "Dataset: $dataset" 
+echo "Subtask: $subtask"
+echo "Number of GPUs: $num_gpus"
+echo "FT Flag: $ft_flag"
 
 echo -e "\n=== Environment ==="
 echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
@@ -44,25 +64,14 @@ echo "PYTHONPATH: $PYTHONPATH"
 
 echo "=== End Debug Information ===\n"
 
-
-model=$1
-dataset=$2
-subtask=$3
-num_gpus=$4
-
-# if num_gpus is not provided, then set it to 1
-if [ -z "$num_gpus" ]; then
-    num_gpus=1
-fi
-
 # if subtask is "default" ignore it
 echo "$(which python)"
 if [ "$subtask" != "default" ]; then
     echo "Running with subtask: $subtask"
-    python run_mteb.py -m $model -d $dataset -s $subtask -n $num_gpus 
+    python run_mteb.py -m $model -d $dataset -s $subtask -n $num_gpus $ft_flag
 else
     echo "Running with no subtask"
-    python run_mteb.py -m $model -d $dataset -n $num_gpus 
+    python run_mteb.py -m $model -d $dataset -n $num_gpus $ft_flag
 fi
 
-# example: bash launch_job.sh jhu-clsp/Rank1-7B BrightRetrieval biology 1
+# example: bash launch_job.sh jhu-clsp/Rank1-7B BrightRetrieval biology 1 --ft

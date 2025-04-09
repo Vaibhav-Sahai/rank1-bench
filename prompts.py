@@ -1,4 +1,3 @@
-import hashlib
 import json
 
 PROMPT_DICT = {
@@ -77,19 +76,112 @@ A passage is relevant if it contains background information about a **sub-concep
 
 }
 
+# Fine-tuned prompts using 0/1 instead of true/false
+FT_PROMPT_DICT = {
+    "SciFact": """Claim: FILL_QUERY_HERE
+
+Rate the passage's relevance: 1 if it provides evidence that either **supports** or **refutes** this claim, 0 otherwise. Consider the passage relevant if it contains information on any related subpart.""",
+
+    "ClimateFEVER": """I need to find evidence that supports or contradicts this statement:
+
+FILL_QUERY_HERE
+
+Rate the passage's relevance from 0 to 1, where 1 means it provides information that supports or contradicts the statement in any way, and 0 means it's not helpful for my citation needs.
+""",
+
+    "TRECCOVID": """FILL_QUERY_HERE 
+
+Rate this article's relevance from 0 to 1, where 1 means it answers any part of the question, and 0 means it's completely irrelevant.""",
+
+    "ArguAna": """I need to find counterarguments against this statement:
+
+FILL_QUERY_HERE
+
+Rate this passage from 0 to 1, where 1 means it contains valuable counterarguments or evidence I can use, and 0 means it offers no opposing viewpoints.
+""",
+
+    "DBPedia": """I'm writing an essay on this topic and need background information:
+
+FILL_QUERY_HERE
+
+Rate this passage from 0 to 1, where 1 means it provides relevant background information, and 0 means it has no useful connection to my topic.
+""",
+
+    "FiQA2018": """FILL_QUERY_HERE 
+
+Rate this passage from 0 to 1, where 1 means it would be a good answer from StackExchange, and 0 means it wouldn't be helpful.""",
+
+    "NFCorpus": """Topic: FILL_QUERY_HERE
+
+I need to learn all aspects of this topic for my job. Rate this passage from 0 to 1, where 1 means it has valuable information (even tangentially related), and 0 means it's completely irrelevant.
+
+Remember, I need information with any type of connection, even weak ones!""",
+
+    "Touche2020": """I need arguments for or against this statement:
+
+FILL_QUERY_HERE
+
+Rate this passage from 0 to 1, where 1 means it contains arguments or evidence I can use in my essay, and 0 means it offers no useful perspective.
+""",
+
+    "SCIDOCS": """I'm looking for papers that could be cited in FILL_QUERY_HERE.
+
+Rate this passage from 0 to 1, where 1 means it has relevance (even indirect) and belongs in the same field of science, and 0 means it's not citable for my work.""",
+
+    "BrightRetrieval_aops": """I need to find math problems similar to this one: FILL_QUERY_HERE
+
+Rate this document from 0 to 1, where 1 means it uses the same class of functions and shares **any** overlapping techniques, and 0 means it's mathematically unrelated.""",
+
+    "BrightRetrieval_theoremqa_questions": """I need to find passages that use the same mathematical process as: FILL_QUERY_HERE
+
+Rate this passage from 0 to 1, where 1 means it employs similar mathematical processes, and 0 means it uses entirely different approaches.""",
+
+    "BrightRetrieval_leetcode": """I'm looking for problems that share similar data structures or algorithms (e.g., DFS, DP, sorting, traversals) with this one:
+    
+FILL_QUERY_HERE
+
+Rate this passage from 0 to 1, where 1 means it shares similar data structures or algorithms (would be in the same textbook), and 0 means it uses completely different approaches.
+""",
+
+    "BrightRetrieval_pony": """I'm using the programming language Pony for this problem: FILL_QUERY_HERE
+
+Rate this passage from 0 to 1, where 1 means it contains documentation relevant to any part of the code I'll need to write, and 0 means it won't help me implement my solution.""",
+
+    "BrightRetrieval": """I need background information about concepts used to answer this question:
+
+FILL_QUERY_HERE
+
+Rate this passage from 0 to 1, where 1 means it contains useful background information about a **sub-concept** that could be cited when answering the question, and 0 means it lacks relevant conceptual background."""
+}
+
 PROMPT_DICT["BrightRetrieval_theoremqa_theorems"] = PROMPT_DICT["BrightRetrieval_theoremqa_questions"]
+FT_PROMPT_DICT["BrightRetrieval_theoremqa_theorems"] = FT_PROMPT_DICT["BrightRetrieval_theoremqa_questions"]
 
 
-def get_prompt(task_name, subtask_name: str = None):
-    if subtask_name is not None and task_name in PROMPT_DICT:
+def get_prompt(task_name, subtask_name: str = None, ft_mode: bool = False):
+    """
+    Get the appropriate prompt for the given task and subtask.
+    
+    Args:
+        task_name: The name of the task
+        subtask_name: The name of the subtask (optional)
+        ft_mode: Whether to use fine-tuned mode prompts (0/1 instead of true/false)
+        
+    Returns:
+        The prompt for the given task and subtask, or None if not found
+    """
+    # Choose the appropriate prompt dictionary based on ft_mode
+    prompt_dict = FT_PROMPT_DICT if ft_mode else PROMPT_DICT
+    
+    if subtask_name is not None and task_name in prompt_dict:
         # if subtask is present, use that, otherwise use just the task name
-        if f"{task_name}_{subtask_name}" in PROMPT_DICT:
-            return PROMPT_DICT[f"{task_name}_{subtask_name}"]
+        if f"{task_name}_{subtask_name}" in prompt_dict:
+            return prompt_dict[f"{task_name}_{subtask_name}"]
         else: # default for subtask (e.g. BrightRetrieval)
-            return PROMPT_DICT[task_name]
-    elif task_name in PROMPT_DICT:
+            return prompt_dict[task_name]
+    elif task_name in prompt_dict:
         # no subtask
-        return PROMPT_DICT[task_name]
+        return prompt_dict[task_name]
     else:
         return None
 
