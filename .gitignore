@@ -3,3 +3,4 @@ rank1-run-files
 .venv
 __pycache__
 test.py
+benchmark/

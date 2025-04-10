@@ -7,10 +7,6 @@ EXTRA_FLAGS="--ft"
 
 # List of datasets to iterate through
 DATASETS=(
-    "biology"
-    "earth_science"
-    "economics"
-    "psychology"
     "robotics"
     "stackoverflow"
     "sustainable_living"

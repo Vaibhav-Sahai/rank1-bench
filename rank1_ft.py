@@ -314,4 +314,11 @@ Remember, the content within the <relevance> tags must be either 0 or 1, with no
             token_counts = [prev_token_count + new_token_count for prev_token_count, new_token_count in zip(token_counts, new_token_counts)]
             self.force_rethink -= 1
 
+        self.response_data = {
+            "scores": scores,
+            "texts": texts,
+            "token_counts": token_counts,
+            "prompts": prompts,
+        }
+        
         return scores

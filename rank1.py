@@ -196,7 +196,6 @@ class rank1(RerankerWrapper):
         # Process complete responses first
         for i, output in enumerate(outputs):
             text = output.outputs[0].text
-            print(f"DEBUG Text: {text}")
             try:
                 final_logits = output.outputs[0].logprobs[-1]
             except Exception as e:
@@ -264,8 +263,6 @@ class rank1(RerankerWrapper):
         else:
             queries, passages, instructions = inputs
 
-        # queries = queries[:10]
-        
         if instructions is not None and instructions[0] is not None:
             queries = [f"{q} {i}".strip() if q.strip() != i.strip() else q.strip() for i, q in zip(instructions, queries)]
 
@@ -287,5 +284,11 @@ class rank1(RerankerWrapper):
             scores = new_scores
             token_counts = [prev_token_count + new_token_count for prev_token_count, new_token_count in zip(token_counts, new_token_counts)]
             self.force_rethink -= 1
-
+            
+        self.response_data = {
+            "scores": scores,
+            "texts": texts,
+            "token_counts": token_counts,
+            "prompts": prompts,
+        }
         return scores

@@ -113,6 +113,22 @@ def run_evaluation(dataset_name: str, subtask: str, model_name: str, num_gpus: i
         eval_splits=eval_splits,
         top_k=100
     )
+    
+    if hasattr(model, 'response_data'):
+        os.makedirs(output_dir, exist_ok=True)
+        response_data_path = os.path.join(output_dir, "response_data.json")
+        
+        serializable_data = {
+            "scores": [float(score) for score in model.response_data["scores"]],
+            "texts": model.response_data["texts"],
+            "token_counts": [int(count) for count in model.response_data["token_counts"]],
+            "prompts": model.response_data["prompts"],
+        }
+        
+        with open(response_data_path, 'w') as f:
+            json.dump(serializable_data, f, indent=2)
+        
+        print(f"Response data saved to {response_data_path}")
 
 
 def main():
