@@ -31,8 +31,8 @@ class rank1(RerankerWrapper):
         self,
         model_name_or_path: str = "jhu-clsp/rank1-7b",
         batch_size: int = 999999999999,
-        context_size: int = 16000,
-        max_output_tokens: int = 8192,
+        context_size: int = 4096,
+        max_output_tokens: int = 1024,
         fp_options: str = "float16",
         num_gpus: int = 1,
         device: str = "cuda",
@@ -80,7 +80,7 @@ class rank1(RerankerWrapper):
             tensor_parallel_size=int(num_gpus),
             trust_remote_code=True,
             max_model_len=context_size,
-            gpu_memory_utilization=0.95,
+            gpu_memory_utilization=0.98,
             dtype=fp_options,
         )
         self.sampling_params = SamplingParams(
@@ -180,7 +180,7 @@ class rank1(RerankerWrapper):
         Returns:
             outputs: The outputs from the vLLM model
         """
-        # prompts = [self.truncate_input(prompt) for prompt in prompts]
+        prompts = [self.truncate_input(prompt) for prompt in prompts]
         outputs = self.model.generate(prompts, self.sampling_params)
 
         # Pre-allocate lists with None values

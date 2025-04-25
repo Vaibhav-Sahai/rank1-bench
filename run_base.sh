@@ -6,8 +6,6 @@ NUM_GPUS=2
 
 # List of datasets to iterate through
 DATASETS=(
-    "economics"
-    "psychology"
     "robotics"
     "stackoverflow"
     "sustainable_living"

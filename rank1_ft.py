@@ -31,7 +31,7 @@ class rank1ft(RerankerWrapper):
         self,
         model_name_or_path: str = "jhu-clsp/rank1-7b",
         batch_size: int = 999999999999,
-        context_size: int = 16000,
+        context_size: int = 4096,
         max_output_tokens: int = 1024,
         fp_options: str = "float16",
         num_gpus: int = 1,
@@ -80,14 +80,14 @@ class rank1ft(RerankerWrapper):
             tensor_parallel_size=int(num_gpus),
             trust_remote_code=True,
             max_model_len=context_size,
-            gpu_memory_utilization=0.95,
+            gpu_memory_utilization=0.98,
             dtype=fp_options,
         )
         self.sampling_params = SamplingParams(
             temperature=0,
             max_tokens=max_output_tokens,
             logprobs=20,
-            stop=["<relevance>1", "<relevance>0"],
+            stop=["<relevance>"],
             skip_special_tokens=False
         )
 
@@ -180,7 +180,7 @@ class rank1ft(RerankerWrapper):
         Returns:
             outputs: The outputs from the vLLM model
         """
-        # prompts = [self.truncate_input(prompt) for prompt in prompts]
+        prompts = [self.truncate_input(prompt) for prompt in prompts]
         outputs = self.model.generate(prompts, self.sampling_params)
 
         # Pre-allocate lists with None values
@@ -196,7 +196,7 @@ class rank1ft(RerankerWrapper):
         # Process complete responses first
         for i, output in enumerate(outputs):
             text = output.outputs[0].text
-            print(f"DEBUG - Text: {text}")
+            # print(f"DEBUG - Text: {text}")
             try:
                 final_logits = output.outputs[0].logprobs[-1]
             except Exception as e:
@@ -206,7 +206,7 @@ class rank1ft(RerankerWrapper):
                 incomplete_indices.append(i)
                 continue
             
-            print(f"DEBUG: bool check {self.true_token in final_logits} {self.false_token in final_logits}")
+            # print(f"DEBUG: bool check {self.true_token in final_logits} {self.false_token in final_logits}")
             if self.true_token not in final_logits or self.false_token not in final_logits:
                 incomplete_prompts.append(prompts[i])
                 incomplete_texts.append(text)
@@ -224,8 +224,8 @@ class rank1ft(RerankerWrapper):
             all_output_token_counts[i] = token_count
             all_scores[i] = score
             
-            print(f"DEBUG: {true_logit} {false_logit} {true_score} {false_score} {score}")
-            print(f"DEBUG - Score: {score}")
+            # print(f"DEBUG: {true_logit} {false_logit} {true_score} {false_score} {score}")
+            # print(f"DEBUG - Score: {score}")
         
         print(f"DEBUG: {len(incomplete_prompts)} incomplete prompts")
         # Handle incomplete responses

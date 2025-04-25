@@ -2,14 +2,14 @@
 
 MODEL="../benchmark/qwen2.5-7b-reasoning-merged/"
 TASK="BrightRetrieval"
-NUM_GPUS=2
+NUM_GPUS=1
 EXTRA_FLAGS="--ft"
 
 # List of datasets to iterate through
 DATASETS=(
-    "robotics"
-    "stackoverflow"
-    "sustainable_living"
+    # "economics"
+    # "stackoverflow"
+    # "sustainable_living"
     "leetcode"
     "pony"
     "aops"
@@ -19,7 +19,7 @@ DATASETS=(
 # Run the command for each dataset
 for DATASET in "${DATASETS[@]}"; do
     echo "Running job for dataset: $DATASET"
-    CUDA_VISIBLE_DEVICES=0,1 time bash launch_job.sh $MODEL $TASK $DATASET $NUM_GPUS $EXTRA_FLAGS
+    CUDA_VISIBLE_DEVICES=0 time bash launch_job.sh $MODEL $TASK $DATASET $NUM_GPUS $EXTRA_FLAGS
     echo "Completed job for dataset: $DATASET"
     echo "-------------------------------------"
 done
