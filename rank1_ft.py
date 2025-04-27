@@ -31,7 +31,7 @@ class rank1ft(RerankerWrapper):
         self,
         model_name_or_path: str = "jhu-clsp/rank1-7b",
         batch_size: int = 999999999999,
-        context_size: int = 4096,
+        context_size: int = 8196,
         max_output_tokens: int = 1024,
         fp_options: str = "float16",
         num_gpus: int = 1,

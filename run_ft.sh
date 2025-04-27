@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MODEL="../benchmark/qwen2.5-7b-reasoning-merged/"
+MODEL="sumuks/relevance-reranker-tiny"
 TASK="BrightRetrieval"
 NUM_GPUS=1
 EXTRA_FLAGS="--ft"
