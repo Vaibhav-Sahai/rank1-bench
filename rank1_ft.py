@@ -18,7 +18,59 @@ from mteb.encoder_interface import Encoder
 from mteb.evaluation.evaluators.RetrievalEvaluator import DenseRetrievalExactSearch
 from mteb.model_meta import ModelMeta
 from mteb.models.rerankers_custom import RerankerWrapper
+import random
 
+# prompts for sys
+
+SYSTEM_PROMPTS = [
+    "You are a helpful assistant. You are going to be given a query and a document. Given the query and the document, please think, and then determine if the document is relevant to the query.",
+    
+    "As an AI trained to evaluate information relevance, analyze the provided query and document. Determine whether the document contains information that directly answers or is closely related to the query.",
+    
+    "You are a relevance assessment expert. Examine the relationship between the given query and document. Evaluate whether the document provides useful information that addresses the query's intent.",
+    
+    "Acting as a search quality evaluator, review the query and document pair. Assess if the document would satisfy a user who submitted this query based on its relevance and information value.",
+    
+    "You are a precision-focused relevance judge. For the provided query and document, determine if there is a meaningful connection that would make this document a valuable result for someone searching with this query.",
+    
+    "As an information retrieval specialist, analyze whether the given document contains content that directly addresses, explains, or provides context for the query. Determine if it's relevant.",
+    
+    "You are a semantic matching expert. Evaluate whether the concepts, topics, and information in the document align with the information need expressed in the query.",
+    
+    "Acting as a relevance classifier, determine if the document contains information that would help answer the query. Consider both explicit and implicit relevance signals.",
+    
+    "You are a query-document relevance analyzer. Assess whether the document provides information that satisfies the intent behind the query, even if it doesn't contain the exact query terms.",
+    
+    "As a search relevance evaluator, determine if this document would be a helpful result for the given query. Consider factors like topical relevance, information completeness, and query intent.",
+    
+    "You are an information need assessor. Given a user query and a document, evaluate whether the document contains information that would fulfill the user's information need expressed in the query.",
+    
+    "Acting as a relevance determination system, analyze the semantic relationship between the query and document. Decide if the document contains information that addresses what the user is looking for.",
+    
+    "You are a search quality rater. Evaluate whether the document provides valuable information related to the query that would satisfy a user's search intent.",
+    
+    "As a content relevance expert, determine if the document contains information that directly or indirectly addresses the information need expressed in the query.",
+    
+    "You are a query-document matcher. Assess whether the document's content is semantically related to and addresses the information need in the query.",
+    
+    "Acting as a relevance judgment system, evaluate whether the document would be considered useful by a user who submitted the given query.",
+    
+    "You are a search result evaluator. Determine if the document contains information that would make it a good search result for the given query.",
+    
+    "As an information relevance detector, analyze whether the document contains content that directly addresses or is closely related to the topic of the query.",
+    
+    "You are a query intent analyzer. Given a query and document, determine if the document satisfies the likely intent behind the query.",
+    
+    "Acting as a relevance assessment tool, evaluate whether the document provides information that would be useful to someone searching for the given query.",
+    
+    "You are a document relevance classifier. Analyze the query and document to determine if there is sufficient topical and semantic overlap to consider the document relevant to the query.",
+    
+    "As a search relevance judge, determine if the document contains information that directly addresses or provides valuable context for understanding the topic of the query.",
+    
+    "You are an information matching expert. Evaluate whether the document would satisfy the information need expressed in the query based on content relevance and usefulness.",
+    
+    "Acting as a relevance evaluation system, determine if the document contains information that would be considered valuable by someone looking for an answer to the given query."
+]
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,7 +85,7 @@ class rank1ft(RerankerWrapper):
         batch_size: int = 999999999999,
         context_size: int = 8196,
         max_output_tokens: int = 1024,
-        fp_options: str = "float16",
+        fp_options: str = "float32",
         num_gpus: int = 1,
         device: str = "cuda",
         force_rethink: int = 0,
@@ -70,8 +122,8 @@ class rank1ft(RerankerWrapper):
         self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Cache commonly used token IDs
-        self.true_token = self.tokenizer("1", add_special_tokens=False).input_ids[0]
-        self.false_token = self.tokenizer("0", add_special_tokens=False).input_ids[0]
+        self.true_token = self.tokenizer("True", add_special_tokens=False).input_ids[0]
+        self.false_token = self.tokenizer("False", add_special_tokens=False).input_ids[0]
         self.think_token = self.tokenizer("<relevance>", add_special_tokens=False).input_ids[0]
         self.think_end_token = self.tokenizer("</relevance>", add_special_tokens=False).input_ids[-1]
 
@@ -97,7 +149,7 @@ class rank1ft(RerankerWrapper):
         generated_texts: List[str]
     ) -> Tuple[List[str], List[int], List[float]]:
         """
-        This function is used to fix incomplete responses from the vLLM model. In some cases the model does not generate the end </reasoning> token.
+        This function is used to fix incomplete responses from the vLLM model. In some cases the model does not generate the end </think> token.
             In these cases, we should force it to generate it so that we have some prediction. 
 
         Args:
@@ -172,7 +224,7 @@ class rank1ft(RerankerWrapper):
 
     def _process_with_vllm(self, prompts):
         """
-        vLLM is significantly faster than HF, so we use it by default. This function handles the cases where the model does not generate the end </reasoning> token.
+        vLLM is significantly faster than HF, so we use it by default. This function handles the cases where the model does not generate the end </think> token.
 
         Args:
             prompts: The prompts to generate from
@@ -196,7 +248,7 @@ class rank1ft(RerankerWrapper):
         # Process complete responses first
         for i, output in enumerate(outputs):
             text = output.outputs[0].text
-            # print(f"DEBUG - Text: {text}")
+            print(f"DEBUG - Text: {text}")
             try:
                 final_logits = output.outputs[0].logprobs[-1]
             except Exception as e:
@@ -206,7 +258,7 @@ class rank1ft(RerankerWrapper):
                 incomplete_indices.append(i)
                 continue
             
-            # print(f"DEBUG: bool check {self.true_token in final_logits} {self.false_token in final_logits}")
+            print(f"DEBUG: bool check {self.true_token in final_logits} {self.false_token in final_logits}")
             if self.true_token not in final_logits or self.false_token not in final_logits:
                 incomplete_prompts.append(prompts[i])
                 incomplete_texts.append(text)
@@ -246,38 +298,24 @@ class rank1ft(RerankerWrapper):
 
     def return_prompt(self, query, doc_content, prompt) -> str:
         query = prompt.replace("FILL_QUERY_HERE", query) if prompt else query
-        return f"""
-You are tasked with determining whether a given document is relevant to answering a specific query. Follow these steps carefully:
-1. You will be presented with a query and a document containing a title and content.
-2. First, examine the query.
-3. Next, examine the document.
-4. Analyze the query carefully. Determine what specific information or answer it is seeking. Consider the key concepts, entities, or relationships mentioned in the query.
-5. Carefully read and analyze the document content. Pay attention to the main topics, key information, and any details that might be relevant to the query.
-6. Reason about the relevance of the document to the query. Consider the following:
-- Does the document contain information that directly answers the query?
-- Does it provide context or background information that would be helpful in understanding or answering the query?
-- Are there any significant matches between key terms or concepts in the query and the document?
-- Even if the document doesn't fully answer the query, does it contain partial information that could contribute to an answer?
-7. Based on your analysis, determine whether the document is relevant or not relevant to answering the query.
-8. Provide your reasoning and verdict in the following format:
-<reasoning> [Explain your thought process here, discussing why you believe the document is or is not relevant to the query. Provide specific examples or quotes from the document if applicable.] </reasoning>
-<relevance>[Insert either 0 for not relevant or 1 for relevant]</relevance>
-Remember, the content within the <relevance> tags must be either 0 or 1, with no other text or explanation.
+        system_prompt = random.choice(SYSTEM_PROMPTS)
+        return f"""{system_prompt}
 
-<question> 
+<query> 
 {query} 
-</question>
+</query>
 
 <document>
 {doc_content} 
 </document>
-<reasoning>"""
+Enclose your final answer as True or False in <relevance> tags. Enclose your thinking in <think> tags.
+<think>"""
 
     def _prepare_prompts_for_rethink(self, prompts: List[str], texts: List[str], rethink_text: str = "Wait") -> List[str]:
         """Prepare prompts for the rethinking step."""
         full_texts = [p + t for p, t in zip(prompts, texts)]
-        stripped_texts = [t.split("</reasoning>")[0] for t in full_texts]
-        just_generated_texts = [t.split("</reasoning>")[0] for t in full_texts]
+        stripped_texts = [t.split("</think>")[0] for t in full_texts]
+        just_generated_texts = [t.split("</think>")[0] for t in full_texts]
         return [s + f"\n{rethink_text}" for s in stripped_texts], just_generated_texts
 
     @torch.inference_mode()
